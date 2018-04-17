@@ -56,6 +56,7 @@ ceph_conf_overrides_all:
      osd_pool_default_pg_num: 32
      osd_pool_default_pgp_num: 32
      mon_osd_down_out_interval: 900
+     osd_crush_initial_weight: 0
    client:
      rbd_cache_size: 134217728
      rbd_cache_max_dirty: 50331648

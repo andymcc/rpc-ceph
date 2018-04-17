@@ -155,6 +155,7 @@ ceph_conf_overrides_extra:
    global:
      osd_pool_default_pg_num: 32
      osd_pool_default_pgp_num: 32
+     osd_crush_initial_weight: "{{ _undefined_var | default(omit) }}"
 # We don't have enough space in an AIO to run 20GB journal devices
 journal_size: 1024
 monitor_interface: eth1
