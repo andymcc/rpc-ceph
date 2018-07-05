@@ -6,9 +6,12 @@
   pre_tasks:
     - name: Install python-keystoneclient
       pip:
-        name: python-keystoneclient
+        name: "{{ item }}"
         state: "{{ ((upgrade_ceph_packages | default(False)) | bool) | ternary('latest', 'present') }}"
         extra_args: "--ignore-installed"
+      with_items:
+        - python-keystoneclient
+        - shade
       delegate_to: 127.0.0.1
       run_once: true
       register: install_pkgs
@@ -16,96 +19,66 @@
       retries: 5
       delay: 2
     - name: Ensure RGW service
-      keystone:
-        command: "ensure_service"
-        endpoint: "{{ keystone_service_adminurl }}/v3"
-        login_user: "{{ keystone_admin_user_name }}"
-        login_password: "{{ keystone_auth_admin_password }}"
-        login_project_name: "{{ keystone_admin_tenant_name }}"
-        service_name: "{{ radosgw_keystone_service_name }}"
+      os_keystone_service:
+        cloud: default
+        name: "{{ radosgw_keystone_service_name }}"
         service_type: "{{ radosgw_keystone_service_type }}"
         description: "{{ radosgw_keystone_service_description }}"
-        insecure: "{{ keystone_service_adminuri_insecure }}"
+        verify: "{{ keystone_service_adminuri_insecure }}"
       delegate_to: 127.0.0.1
       run_once: true
       when: radosgw_keystone | bool
-      register: add_service
-      until: add_service|success
-      retries: 5
-      delay: 2
       no_log: True
       tags:
         - ceph-rgw-setup
         - rgw-service-add
-    - name: Ensure RGW user
-      keystone:
-        command: "ensure_user"
-        endpoint: "{{ keystone_service_adminurl }}/v3"
-        login_user: "{{ keystone_admin_user_name }}"
-        login_password: "{{ keystone_auth_admin_password }}"
-        login_project_name: "{{ keystone_admin_tenant_name }}"
-        user_name: "{{ radosgw_keystone_admin_user }}"
-        tenant_name: "{{ radosgw_keystone_admin_tenant }}"
-        role_name: "{{ radosgw_keystone_role_name | default('service') }}"
+    - name: Ensure RGW user exists
+      os_user:
+        cloud: default
+        name: "{{ radosgw_keystone_admin_user }}"
+        default_project: "{{ radosgw_keystone_admin_tenant }}"
         password: "{{ radosgw_keystone_admin_password }}"
-        insecure: "{{ keystone_service_adminuri_insecure }}"
+        verify: "{{ keystone_service_adminuri_insecure }}"
       delegate_to: 127.0.0.1
       run_once: true
       when: radosgw_keystone | bool
-      register: add_service
-      until: add_service|success
-      retries: 5
-      delay: 10
       no_log: True
       tags:
         - ceph-rgw-setup
         - rgw-service-add
-    - name: Ensure RGW user to admin role
-      keystone:
-        command: "ensure_user_role"
-        endpoint: "{{ keystone_service_adminurl }}/v3"
-        login_user: "{{ keystone_admin_user_name }}"
-        login_password: "{{ keystone_auth_admin_password }}"
-        login_project_name: "{{ keystone_admin_tenant_name }}"
-        user_name: "{{ radosgw_keystone_admin_user }}"
-        tenant_name: "{{ radosgw_keystone_admin_tenant }}"
-        role_name: "{{ radosgw_keystone_role_name | default('admin') }}"
-        insecure: "{{ keystone_service_adminuri_insecure }}"
+    - name: Ensure RGW user has service and admin roles
+      os_user_role:
+        cloud: default
+        user: "{{ radosgw_keystone_admin_user }}"
+        project: "{{ radosgw_keystone_admin_tenant }}"
+        role: "{{ item }}"
+        verify: "{{ keystone_service_adminuri_insecure }}"
+      with_items:
+        - "{{ radosgw_keystone_role_name | default('service') }}"
+        - "{{ radosgw_keystone_role_name | default('admin') }}"
       delegate_to: 127.0.0.1
       run_once: true
-      register: add_admin_role
-      when: radosgw_keystone | bool
-      until: add_admin_role|success
-      retries: 5
-      delay: 10
       tags:
         - ceph-rgw-setup
         - rgw-service-add
     - name: Ensure RGW endpoint
-      keystone:
-        command: "ensure_endpoint"
-        endpoint: "{{ keystone_service_adminurl }}/v3"
-        login_user: "{{ keystone_admin_user_name }}"
-        login_password: "{{ keystone_auth_admin_password }}"
-        login_project_name: "{{ keystone_admin_tenant_name }}"
-        region_name: "{{ radosgw_keystone_service_region }}"
-        service_name: "{{ radosgw_keystone_service_name }}"
-        service_type: "{{ radosgw_keystone_service_type }}"
-        insecure: "{{ keystone_service_adminuri_insecure }}"
-        endpoint_list:
-          - url: "{{ radosgw_service_publicurl }}"
-            interface: "public"
-          - url: "{{ radosgw_service_adminurl }}"
-            interface: "admin"
-          - url: "{{ radosgw_service_internalurl }}"
-            interface: "internal"
+      os_keystone_endpoint:
+        cloud: default
+        region: "{{ radosgw_keystone_service_region }}"
+        service: "{{ radosgw_keystone_service_name }}"
+        state: present
+        verify: "{{ keystone_service_adminuri_insecure }}"
+        url: "{{ item.url }}"
+        endpoint_interface: "{{ item.interface }}"
+      with_items:
+        - url: "{{ radosgw_service_publicurl }}"
+          interface: "public"
+        - url: "{{ radosgw_service_adminurl }}"
+          interface: "admin"
+        - url: "{{ radosgw_service_internalurl }}"
+          interface: "internal"
       delegate_to: 127.0.0.1
       run_once: true
-      register: add_service
-      when: radosgw_keystone | bool
-      until: add_service|success
-      retries: 5
-      delay: 10
       no_log: True
       tags:
         - ceph-rgw-setup
